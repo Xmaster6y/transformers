@@ -181,7 +181,7 @@ def main():
         training_args.local_rank,
         training_args.device,
         training_args.n_gpu,
-        bool(training_args.parallel_mode == ParallelMode.DISTRIBUTED),
+        training_args.parallel_mode == ParallelMode.DISTRIBUTED,
         training_args.fp16,
     )
     transformers.utils.logging.enable_default_handler()
@@ -320,7 +320,7 @@ def main():
 
         if trainer.is_world_process_zero():
             handle_metrics("train", metrics, training_args.output_dir)
-            all_metrics.update(metrics)
+            all_metrics |= metrics
 
             # Need to save the state, since Trainer.save_model saves only the tokenizer with the model
             trainer.state.save_to_json(os.path.join(training_args.output_dir, "trainer_state.json"))

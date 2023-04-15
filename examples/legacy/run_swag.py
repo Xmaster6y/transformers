@@ -73,17 +73,17 @@ class SwagExample(object):
 
     def __repr__(self):
         attributes = [
-            "swag_id: {}".format(self.swag_id),
-            "context_sentence: {}".format(self.context_sentence),
-            "start_ending: {}".format(self.start_ending),
-            "ending_0: {}".format(self.endings[0]),
-            "ending_1: {}".format(self.endings[1]),
-            "ending_2: {}".format(self.endings[2]),
-            "ending_3: {}".format(self.endings[3]),
+            f"swag_id: {self.swag_id}",
+            f"context_sentence: {self.context_sentence}",
+            f"start_ending: {self.start_ending}",
+            f"ending_0: {self.endings[0]}",
+            f"ending_1: {self.endings[1]}",
+            f"ending_2: {self.endings[2]}",
+            f"ending_3: {self.endings[3]}",
         ]
 
         if self.label is not None:
-            attributes.append("label: {}".format(self.label))
+            attributes.append(f"label: {self.label}")
 
         return ", ".join(attributes)
 
@@ -105,7 +105,7 @@ def read_swag_examples(input_file, is_training=True):
     if is_training and lines[0][-1] != "label":
         raise ValueError("For training, the input file must contain a label column.")
 
-    examples = [
+    return [
         SwagExample(
             swag_id=line[2],
             context_sentence=line[4],
@@ -120,8 +120,6 @@ def read_swag_examples(input_file, is_training=True):
         )
         for line in lines[1:]  # we skip the line with the column names
     ]
-
-    return examples
 
 
 def convert_examples_to_features(examples, tokenizer, max_seq_length, is_training):
@@ -149,7 +147,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length, is_trainin
         start_ending_tokens = tokenizer.tokenize(example.start_ending)
 
         choices_features = []
-        for ending_index, ending in enumerate(example.endings):
+        for ending in example.endings:
             # We create a copy of the context tokens in order to be
             # able to shrink it according to ending_tokens
             context_tokens_choice = context_tokens[:]
@@ -181,15 +179,15 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length, is_trainin
         label = example.label
         if example_index < 5:
             logger.info("*** Example ***")
-            logger.info("swag_id: {}".format(example.swag_id))
+            logger.info(f"swag_id: {example.swag_id}")
             for choice_idx, (tokens, input_ids, input_mask, segment_ids) in enumerate(choices_features):
-                logger.info("choice: {}".format(choice_idx))
-                logger.info("tokens: {}".format(" ".join(tokens)))
-                logger.info("input_ids: {}".format(" ".join(map(str, input_ids))))
-                logger.info("input_mask: {}".format(" ".join(map(str, input_mask))))
-                logger.info("segment_ids: {}".format(" ".join(map(str, segment_ids))))
+                logger.info(f"choice: {choice_idx}")
+                logger.info(f'tokens: {" ".join(tokens)}')
+                logger.info(f'input_ids: {" ".join(map(str, input_ids))}')
+                logger.info(f'input_mask: {" ".join(map(str, input_mask))}')
+                logger.info(f'segment_ids: {" ".join(map(str, segment_ids))}')
             if is_training:
-                logger.info("label: {}".format(label))
+                logger.info(f"label: {label}")
 
         features.append(InputFeatures(example_id=example.swag_id, choices_features=choices_features, label=label))
 
@@ -238,11 +236,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
     input_file = args.predict_file if evaluate else args.train_file
     cached_features_file = os.path.join(
         os.path.dirname(input_file),
-        "cached_{}_{}_{}".format(
-            "dev" if evaluate else "train",
-            list(filter(None, args.model_name_or_path.split("/"))).pop(),
-            str(args.max_seq_length),
-        ),
+        f'cached_{"dev" if evaluate else "train"}_{list(filter(None, args.model_name_or_path.split("/"))).pop()}_{str(args.max_seq_length)}',
     )
     if os.path.exists(cached_features_file) and not args.overwrite_cache and not output_examples:
         logger.info("Loading features from cached file %s", cached_features_file)
@@ -265,14 +259,8 @@ def load_and_cache_examples(args, tokenizer, evaluate=False, output_examples=Fal
     all_segment_ids = torch.tensor(select_field(features, "segment_ids"), dtype=torch.long)
     all_label = torch.tensor([f.label for f in features], dtype=torch.long)
 
-    if evaluate:
-        dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label)
-    else:
-        dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label)
-
-    if output_examples:
-        return dataset, examples, features
-    return dataset
+    dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label)
+    return (dataset, examples, features) if output_examples else dataset
 
 
 def train(args, train_dataset, model, tokenizer):
@@ -294,10 +282,21 @@ def train(args, train_dataset, model, tokenizer):
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "params": [
+                p
+                for n, p in model.named_parameters()
+                if all(nd not in n for nd in no_decay)
+            ],
             "weight_decay": args.weight_decay,
         },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        {
+            "params": [
+                p
+                for n, p in model.named_parameters()
+                if any(nd in n for nd in no_decay)
+            ],
+            "weight_decay": 0.0,
+        },
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
@@ -384,14 +383,14 @@ def train(args, train_dataset, model, tokenizer):
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
                         results = evaluate(args, model, tokenizer)
                         for key, value in results.items():
-                            tb_writer.add_scalar("eval_{}".format(key), value, global_step)
+                            tb_writer.add_scalar(f"eval_{key}", value, global_step)
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
                     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
                     logging_loss = tr_loss
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     # Save model checkpoint
-                    output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
+                    output_dir = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                     model_to_save = (
                         model.module if hasattr(model, "module") else model
                     )  # Take care of distributed/parallel training
@@ -425,7 +424,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     eval_dataloader = DataLoader(dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
 
     # Eval!
-    logger.info("***** Running evaluation {} *****".format(prefix))
+    logger.info(f"***** Running evaluation {prefix} *****")
     logger.info("  Num examples = %d", len(dataset))
     logger.info("  Batch size = %d", args.eval_batch_size)
 
@@ -594,9 +593,7 @@ def main():
         and not args.overwrite_output_dir
     ):
         raise ValueError(
-            "Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(
-                args.output_dir
-            )
+            f"Output directory ({args.output_dir}) already exists and is not empty. Use --overwrite_output_dir to overcome."
         )
 
     # Setup distant debugging if needed
@@ -630,7 +627,7 @@ def main():
         args.local_rank,
         device,
         args.n_gpu,
-        bool(args.local_rank != -1),
+        args.local_rank != -1,
         args.fp16,
     )
     # Set the verbosity to info of the Transformers logger (on main process only):
@@ -651,7 +648,9 @@ def main():
         args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
     )
     model = AutoModelForMultipleChoice.from_pretrained(
-        args.model_name_or_path, from_tf=bool(".ckpt" in args.model_name_or_path), config=config
+        args.model_name_or_path,
+        from_tf=".ckpt" in args.model_name_or_path,
+        config=config,
     )
 
     if args.local_rank == 0:
@@ -689,15 +688,15 @@ def main():
     # Evaluation - we can ask to evaluate all the checkpoints (sub-directories) in a directory
     results = {}
     if args.do_eval and args.local_rank in [-1, 0]:
-        if args.do_train:
-            checkpoints = [args.output_dir]
-        else:
-            # if do_train is False and do_eval is true, load model directly from pretrained.
-            checkpoints = [args.model_name_or_path]
-
+        checkpoints = [args.output_dir] if args.do_train else [args.model_name_or_path]
         if args.eval_all_checkpoints:
             checkpoints = [
-                os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
+                os.path.dirname(c)
+                for c in sorted(
+                    glob.glob(
+                        f"{args.output_dir}/**/{WEIGHTS_NAME}", recursive=True
+                    )
+                )
             ]
 
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
@@ -712,10 +711,13 @@ def main():
             # Evaluate
             result = evaluate(args, model, tokenizer, prefix=global_step)
 
-            result = {k + ("_{}".format(global_step) if global_step else ""): v for k, v in result.items()}
-            results.update(result)
+            result = {
+                k + (f"_{global_step}" if global_step else ""): v
+                for k, v in result.items()
+            }
+            results |= result
 
-    logger.info("Results: {}".format(results))
+    logger.info(f"Results: {results}")
 
     return results
 

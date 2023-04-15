@@ -101,7 +101,7 @@ def run_search():
     task = "translation" if "translation" in args.task else "summarization"
 
     matrix, col_names = parse_search_arg(args.search)
-    col_names[0:0] = task_score_names[task]  # score cols first
+    col_names[:0] = task_score_names[task]
     col_widths = {col: len(str(col)) for col in col_names}
     results = []
     for r in matrix:

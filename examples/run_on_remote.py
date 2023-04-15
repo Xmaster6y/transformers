@@ -37,15 +37,15 @@ if __name__ == "__main__":
     parser.add_argument("--use_spot", type=bool, default=False)
     parser.add_argument("--example", type=str, default="pytorch/text-generation/run_generation.py")
     args, unknown = parser.parse_known_args()
-    if args.host != "localhost":
-        if args.instance != "V100:1" or args.provider != "cheapest":
-            raise ValueError("Cannot specify both BYO and on-demand cluster args")
-        cluster = rh.cluster(
-            name="rh-cluster", ips=[args.host], ssh_creds={"ssh_user": args.user, "ssh_private_key": args.key_path}
-        )
-    else:
+    if args.host == "localhost":
         cluster = rh.cluster(
             name="rh-cluster", instance_type=args.instance, provider=args.provider, use_spot=args.use_spot
+        )
+    elif args.instance != "V100:1" or args.provider != "cheapest":
+        raise ValueError("Cannot specify both BYO and on-demand cluster args")
+    else:
+        cluster = rh.cluster(
+            name="rh-cluster", ips=[args.host], ssh_creds={"ssh_user": args.user, "ssh_private_key": args.key_path}
         )
     example_dir = args.example.rsplit("/", 1)[0]
 
